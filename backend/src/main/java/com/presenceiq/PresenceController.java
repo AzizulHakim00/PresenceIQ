@@ -65,7 +65,18 @@ public class PresenceController {
     @PostMapping("/sessions/{id}/close")
     @PreAuthorize("hasRole('ADMIN')")
     public Document close(@PathVariable String id, Authentication auth) {
-        return svc.transition(id,"CLOSED",auth.getName());
+        Document closed = svc.transition(id,"CLOSED",auth.getName());
+        String alias = Objects.toString(closed.getOrDefault("cameraAlias",""),"");
+        if (!alias.isBlank()) {
+            Document camera = svc.camera(alias);
+            if ("RTSP".equals(camera.getString("sourceType"))) {
+                try { forward("/streams/"+alias+"/stop",Map.of("session_id",id)); }
+                catch (RuntimeException ignored) {
+                    // A stopped backend ingestion endpoint also forces the RTSP worker to exit.
+                }
+            }
+        }
+        return closed;
     }
     @GetMapping("/sessions/{id}/observations")
     public List<Document> observations(@PathVariable String id) { return svc.observations(id); }
