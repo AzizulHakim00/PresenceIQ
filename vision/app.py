@@ -14,6 +14,7 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import cv2
@@ -167,6 +168,12 @@ def stream_worker(camera_id: str, session_id: str, stop_event: threading.Event):
             try:
                 event = infer_bgr(session_id, frame)
                 post_observation(session_id, event)
+            except HTTPError as exc:
+                if exc.code in (401, 403, 404, 409):
+                    # The backend no longer accepts this session; terminate the stream.
+                    print(f"[RTSP {camera_id}] stopping: backend rejected session ({exc.code})", flush=True)
+                    break
+                print(f"[RTSP {camera_id}] backend temporary error: {exc.code}", flush=True)
             except Exception as exc:
                 # No raw image or credential is written to logs.
                 print(f"[RTSP {camera_id}] observation failed: {type(exc).__name__}", flush=True)
