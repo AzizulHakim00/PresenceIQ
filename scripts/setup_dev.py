@@ -22,9 +22,9 @@ def main():
     names = re.findall(r"REPLACE_WITH_[A-Z_]+", raw)
     if len(names) != 5:
         raise SystemExit(f"Unexpected secret template count ({len(names)}); inspect .env.example.")
-    values = {name: secrets.token_urlsafe(36) for name in set(names)}
-    for name, value in values.items():
-        raw = raw.replace(name, value)
+    # Generate each secret separately, even if template marker text repeats.
+    raw = re.sub(r"REPLACE_WITH_[A-Z_]+",
+                 lambda _match: secrets.token_urlsafe(36), raw)
     if "REPLACE_WITH_" in raw:
         raise SystemExit("Unreplaced template secret found")
     fd = os.open(DEST, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
