@@ -130,11 +130,23 @@ public class PresenceService {
         Document latest = mongo.findOne(lastQ,Document.class,"observations");
         boolean gap = latest != null && elapsed - asInt(latest.get("elapsedSeconds"),elapsed) > 20;
         boolean needsReview = people==0 || (people>0 && conf<0.50) || gap;
+        // Resumable historical imports use a stable external reference.
+        // They are explicitly labeled REPLAY and never treated as live presence.
+        String externalRef = Objects.toString(raw.getOrDefault("externalRef",""),"").trim();
+        if (!externalRef.isBlank()) {
+            if (!"V11_3_REPLAY".equals(source) ||
+                !externalRef.matches("[A-Za-z0-9_:/.-]{1,140}"))
+                throw bad("Invalid replay externalRef");
+            Document prior = mongo.findOne(Query.query(Criteria.where("sessionId").is(id)
+                    .and("externalRef").is(externalRef)),Document.class,"observations");
+            if (prior != null) return prior;
+        }
         Document obs = object(newId()).append("sessionId",id).append("source",source)
             .append("elapsedSeconds",elapsed).append("windowIndex",window)
             .append("count",people).append("trackedCount",tracked)
             .append("meanConfidence",conf).append("gapFlag",gap)
             .append("needsReview",needsReview).append("recordedAt",now());
+        if (!externalRef.isBlank()) obs.append("externalRef",externalRef);
         mongo.insert(obs,"observations");
         if (needsReview) {
             Query existing = Query.query(Criteria.where("sessionId").is(id)
