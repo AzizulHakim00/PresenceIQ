@@ -5,9 +5,9 @@ Docker Engine + Docker Compose v2, and the licensed V9 YOLO person/face checkpoi
 
 ## 2. Secrets and local environment
 ```bash
-cp .env.example .env
+python scripts/setup_dev.py
 ```
-Replace every `REPLACE_WITH...` value with a distinct random secret of at least 20 characters. **Never commit the .env file.**
+The script generates distinct random secrets into a private .env; it refuses to overwrite an existing .env. **Never commit the file.**
 Place your YOLO checkpoint in `models/best.pt` (ignored by Git).
 
 ```bash
