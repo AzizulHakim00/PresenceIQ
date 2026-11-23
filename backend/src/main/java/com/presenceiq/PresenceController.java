@@ -82,6 +82,21 @@ public class PresenceController {
         return svc.addObservation(id,body,"EDGE_CAMERA",auth.getName());
     }
 
+    @PostMapping("/internal/sessions/{id}/replay/batch")
+    @PreAuthorize("hasAnyRole('INGEST','ADMIN')")
+    public Map<String,Object> replayBatch(@PathVariable String id,
+            @RequestBody List<Map<String,Object>> observations, Authentication auth) {
+        if (observations.isEmpty() || observations.size()>200)
+            throw PresenceService.bad("Replay batch must contain 1 to 200 frames.");
+        int processed=0;
+        for (Map<String,Object> row : observations) {
+            svc.addObservation(id,row,"V11_3_REPLAY",auth.getName());
+            processed++;
+        }
+        return Map.of("status","ACCEPTED","processed",processed,
+                "note","Replay observations are historical occupancy evidence, not named attendance.");
+    }
+
     @GetMapping("/reviews")
     public List<Document> reviews(@RequestParam(defaultValue="PENDING") String status) {
         return svc.reviews(status);
