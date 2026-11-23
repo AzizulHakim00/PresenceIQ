@@ -37,7 +37,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Python syntax checks
-        run: python -m compileall -q vision/app.py
+        run: python -m compileall -q vision/app.py scripts/import_v11_3.py scripts/setup_dev.py
 
   integration:
     runs-on: ubuntu-latest
