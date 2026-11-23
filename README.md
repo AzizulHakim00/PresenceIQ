@@ -30,8 +30,8 @@ PresenceIQ combines person detection, temporal tracking evidence, five observati
 ```bash
 git clone https://github.com/AzizulHakim00/PresenceIQ.git
 cd PresenceIQ
-cp .env.example .env
-# Edit .env with strong, distinct secrets.
+python scripts/setup_dev.py
+# Setup generates private, distinct secrets. Inspect .env locally.
 # Put the existing trained class-0-person YOLO checkpoint at models/best.pt.
 docker compose up --build
 ```
