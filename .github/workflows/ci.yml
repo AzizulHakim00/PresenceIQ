@@ -1,0 +1,40 @@
+name: PresenceIQ CI
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+jobs:
+  java:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Spring Boot tests and compilation
+        run: mvn -B -f backend/pom.xml verify
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build React application
+        run: |
+          cd frontend
+          npm install --no-audit --no-fund
+          npm run build
+  vision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python syntax checks
+        run: python -m compileall -q vision/app.py
