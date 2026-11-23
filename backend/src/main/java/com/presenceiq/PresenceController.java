@@ -110,7 +110,7 @@ public class PresenceController {
         return svc.registerIdentity(body,auth.getName());
     }
     @GetMapping("/identities")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','REVIEWER')")
     public List<Document> identities() { return svc.identities(); }
     @PostMapping("/checkins")
     @PreAuthorize("hasRole('ADMIN')")
