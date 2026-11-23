@@ -101,3 +101,15 @@ jobs:
       - name: Dump API logs on failure
         if: failure()
         run: cat /tmp/presenceiq-api.log || true
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate local throwaway test credentials
+        run: python scripts/setup_dev.py
+      - name: Validate Docker Compose configuration
+        run: docker compose config -q
