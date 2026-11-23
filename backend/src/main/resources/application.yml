@@ -1,0 +1,31 @@
+server:
+  port: 8080
+  error:
+    include-message: always
+spring:
+  application:
+    name: presenceiq-api
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/presenceiq}
+  servlet:
+    multipart:
+      max-file-size: 3MB
+      max-request-size: 4MB
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+app:
+  allowed-origin: ${APP_ALLOWED_ORIGIN:http://localhost:5173}
+  security:
+    admin-username: ${PRESENCEIQ_ADMIN_USERNAME:admin}
+    admin-password: ${PRESENCEIQ_ADMIN_PASSWORD:}
+    reviewer-username: ${PRESENCEIQ_REVIEWER_USERNAME:reviewer}
+    reviewer-password: ${PRESENCEIQ_REVIEWER_PASSWORD:}
+    ingest-username: ${PRESENCEIQ_INGEST_USERNAME:vision-ingest}
+    ingest-password: ${PRESENCEIQ_INGEST_PASSWORD:}
+  vision:
+    url: ${VISION_SERVICE_URL:http://localhost:8001}
+    token: ${VISION_SHARED_TOKEN:}

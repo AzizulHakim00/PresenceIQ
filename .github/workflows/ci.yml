@@ -1,0 +1,115 @@
+name: PresenceIQ CI
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+jobs:
+  java:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Spring Boot tests and compilation
+        run: mvn -B -f backend/pom.xml verify
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build React application
+        run: |
+          cd frontend
+          npm install --no-audit --no-fund
+          npm run build
+  vision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python syntax checks
+        run: python -m compileall -q vision/app.py scripts/import_v11_3.py scripts/setup_dev.py
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SPRING_DATA_MONGODB_URI: mongodb://127.0.0.1:27017/presenceiq_ci
+      PRESENCEIQ_ADMIN_PASSWORD: LocalCIAdminPasswordUnique000123
+      PRESENCEIQ_REVIEWER_PASSWORD: LocalCIReviewerPasswordUnique000123
+      PRESENCEIQ_INGEST_PASSWORD: LocalCIIngestPasswordUnique000123
+      VISION_SHARED_TOKEN: LocalCIVisionTokenUnique0001234
+      APP_ALLOWED_ORIGIN: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Start API against isolated MongoDB service
+        run: |
+          cd backend
+          mvn -q spring-boot:run > /tmp/presenceiq-api.log 2>&1 &
+          echo $! > /tmp/presenceiq-api.pid
+          for i in $(seq 1 90); do
+            if curl --silent --fail http://127.0.0.1:8080/api/health >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/presenceiq-api.log
+          exit 1
+      - name: Smoke test roles, sessions, five windows, review, roster and CSV
+        run: |
+          set -euo pipefail
+          A="admin:$PRESENCEIQ_ADMIN_PASSWORD"
+          R="reviewer:$PRESENCEIQ_REVIEWER_PASSWORD"
+          I="vision-ingest:$PRESENCEIQ_INGEST_PASSWORD"
+          BASE=http://127.0.0.1:8080/api
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u "$R" -H 'Content-Type: application/json' -d '{"title":"Blocked","environment":"CLASSROOM","plannedMinutes":5}' "$BASE/sessions")" = 403
+          SESSION=$(curl -fsS -u "$A" -H 'Content-Type: application/json' -d '{"title":"CI test","environment":"CLASSROOM","plannedMinutes":5}' "$BASE/sessions" | jq -r '._id')
+          test -n "$SESSION"
+          curl -fsS -u "$A" -X POST "$BASE/sessions/$SESSION/start" >/dev/null
+          curl -fsS -u "$I" -H 'Content-Type: application/json' -d '{"count":0,"trackedCount":0,"meanConfidence":0.0}' "$BASE/internal/sessions/$SESSION/observations" >/dev/null
+          test "$(curl -fsS -u "$R" "$BASE/sessions/$SESSION/windows" | jq length)" = 5
+          REVIEW=$(curl -fsS -u "$R" "$BASE/reviews?status=PENDING" | jq -r '.[0]._id')
+          test -n "$REVIEW"
+          curl -fsS -u "$R" -H 'Content-Type: application/json' -d '{"decision":"NEEDS_MORE_EVIDENCE","note":"CI review"}' "$BASE/reviews/$REVIEW/decision" >/dev/null
+          PERSON=$(curl -fsS -u "$A" -H 'Content-Type: application/json' -d '{"externalCode":"CI-0001","displayName":"Demo Person","memberType":"STUDENT"}' "$BASE/identities" | jq -r '._id')
+          CLAIM=$(curl -fsS -u "$A" -H 'Content-Type: application/json' -d "{\"identityId\":\"$PERSON\",\"sessionId\":\"$SESSION\",\"method\":\"MANUAL\",\"evidenceRef\":\"ci-only\"}" "$BASE/checkins" | jq -r '._id')
+          curl -fsS -u "$R" -H 'Content-Type: application/json' -d '{"decision":"VERIFIED","note":"Reviewed CI credential evidence"}' "$BASE/checkins/$CLAIM/verify" >/dev/null
+          curl -fsS -u "$R" "$BASE/identities" | jq -e 'length >= 1' >/dev/null
+          curl -fsS -u "$R" "$BASE/sessions/$SESSION/report.csv" | grep 'session_id,session_title,window'
+          curl -fsS -u "$A" "$BASE/audit" | jq -e 'length >= 4' >/dev/null
+          curl -fsS -u "$A" -X POST "$BASE/sessions/$SESSION/close" >/dev/null
+      - name: Dump API logs on failure
+        if: failure()
+        run: cat /tmp/presenceiq-api.log || true
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate local throwaway test credentials
+        run: python scripts/setup_dev.py
+      - name: Validate Docker Compose configuration
+        run: docker compose config -q

@@ -1,0 +1,68 @@
+name: presenceiq
+services:
+  mongodb:
+    image: mongo:8.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?Set MONGO_ROOT_USER in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
+    volumes:
+      - mongo_data:/data/db
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --username \"$$MONGO_INITDB_ROOT_USERNAME\" --password \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.adminCommand({ping:1}).ok' | grep 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      SPRING_DATA_MONGODB_URI: ${MONGO_URI:-mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongodb:27017/presenceiq?authSource=admin}
+      PRESENCEIQ_ADMIN_USERNAME: ${PRESENCEIQ_ADMIN_USERNAME:-admin}
+      PRESENCEIQ_ADMIN_PASSWORD: ${PRESENCEIQ_ADMIN_PASSWORD:?Set admin secret}
+      PRESENCEIQ_REVIEWER_USERNAME: ${PRESENCEIQ_REVIEWER_USERNAME:-reviewer}
+      PRESENCEIQ_REVIEWER_PASSWORD: ${PRESENCEIQ_REVIEWER_PASSWORD:?Set reviewer secret}
+      PRESENCEIQ_INGEST_USERNAME: ${PRESENCEIQ_INGEST_USERNAME:-vision-ingest}
+      PRESENCEIQ_INGEST_PASSWORD: ${PRESENCEIQ_INGEST_PASSWORD:?Set ingest secret}
+      APP_ALLOWED_ORIGIN: ${APP_ALLOWED_ORIGIN:-http://localhost:5173}
+      VISION_SERVICE_URL: http://vision:8001
+      VISION_SHARED_TOKEN: ${VISION_SHARED_TOKEN:?Set vision token}
+    depends_on:
+      mongodb: {condition: service_healthy}
+    ports: ["127.0.0.1:8080:8080"]
+    networks: [backend]
+
+  vision:
+    build: ./vision
+    restart: unless-stopped
+    environment:
+      VISION_SHARED_TOKEN: ${VISION_SHARED_TOKEN:?Set vision token}
+      YOLO_MODEL_PATH: ${YOLO_MODEL_PATH:-/models/best.pt}
+      VISION_DEVICE: ${VISION_DEVICE:-cpu}
+      PRESENCEIQ_INGEST_URL: http://api:8080
+      PRESENCEIQ_INGEST_USERNAME: ${PRESENCEIQ_INGEST_USERNAME:-vision-ingest}
+      PRESENCEIQ_INGEST_PASSWORD: ${PRESENCEIQ_INGEST_PASSWORD:?Set ingest secret}
+      CAMERA_STREAMS_JSON: ${CAMERA_STREAMS_JSON:-{}}
+    volumes:
+      - ./models:/models:ro
+    depends_on: [api]
+    networks: [backend]
+    # No public port: camera credentials and raw frames stay on the internal network.
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+    restart: unless-stopped
+    ports: ["127.0.0.1:5173:80"]
+    depends_on: [api]
+    networks: [backend]
+
+volumes:
+  mongo_data:
+networks:
+  backend:
+    driver: bridge
