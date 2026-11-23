@@ -1,7 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
-
 :root{
-  font-family:'DM Sans',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   color:#192333;background:#f5f7fa;font-synthesis:none;font-optical-sizing:auto;
   font-smooth:always;-webkit-font-smoothing:antialiased;
 }
@@ -13,7 +11,7 @@ button:disabled{cursor:not-allowed;opacity:.55}
 a{color:inherit}
 #root{min-height:100vh}
 h1,h2,h3,p{margin-top:0}
-h1,h2,h3,.brand,.stat-value{font-family:Manrope,'DM Sans',sans-serif;letter-spacing:-.035em}
+h1,h2,h3,.brand,.stat-value{font-family:system-ui,sans-serif;letter-spacing:-.035em}
 .login-shell{min-height:100vh;display:grid;grid-template-columns:1.12fr .88fr;background:#eff3f5}
 .login-intro{background:linear-gradient(144deg,#10232d 0%,#142f39 55%,#184a50 100%);color:#fff;padding:clamp(40px,8vw,115px);display:flex;flex-direction:column;justify-content:center;min-height:100vh}
 .login-intro .mark{margin-bottom:52px}
@@ -23,7 +21,7 @@ h1,h2,h3,.brand,.stat-value{font-family:Manrope,'DM Sans',sans-serif;letter-spac
 .login-intro>p:not(.eyebrow){font-size:17px;line-height:1.85;max-width:540px;color:#afc6c9}
 .login-metrics{display:flex;gap:55px;margin-top:70px}
 .login-metrics span{font-family:Manrope;font-size:28px;font-weight:800}
-.login-metrics span small{display:block;color:#99c0bd;font:700 10px 'DM Sans';letter-spacing:.14em;margin-top:8px}
+.login-metrics span small{display:block;color:#99c0bd;font:700 10px system-ui;letter-spacing:.14em;margin-top:8px}
 .mark{background:#1e967c;color:#fff;width:41px;height:41px;display:grid;place-items:center;border-radius:12px;box-shadow:0 6px 20px #11665442}
 .mark.large{width:52px;height:52px;border-radius:16px}
 .panel{background:#fff;border:1px solid #e3e9ec;border-radius:16px;box-shadow:0 5px 24px #263a4310}
