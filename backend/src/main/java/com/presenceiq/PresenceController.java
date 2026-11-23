@@ -191,7 +191,7 @@ public class PresenceController {
                 "meanConfidence",confValue),"BROWSER_WEBCAM",auth.getName());
         Map<String,Object> res=new LinkedHashMap<>();
         res.put("observation",obs);
-        res.put("detections",detected.getOrDefault("detections",List.of()));
+        res.put("detections",detected.containsKey("detections") ? detected.get("detections") : List.of());
         res.put("note","Temporary track IDs are not verified identities.");
         return res;
     }
