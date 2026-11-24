@@ -35,6 +35,9 @@ services:
     networks: [backend]
 
   vision:
+    # Opt-in: avoids downloading the large ML stack when starting the dashboard.
+    # Start with: docker compose --profile vision up -d --build
+    profiles: [vision]
     build: ./vision
     restart: unless-stopped
     environment:
