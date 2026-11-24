@@ -11,7 +11,7 @@ The script generates distinct random secrets into a private .env; it refuses to 
 Place your YOLO checkpoint in `models/best.pt` (ignored by Git).
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
 
 Open http://localhost:5173 . API health: http://localhost:8080/api/health .
@@ -47,3 +47,21 @@ Set `CAMERA_STREAMS_JSON` in the vision service environment (e.g. `{"lab-1":"rts
 - Design real credential verification (signed QR or reader events). A UI-entered reference is **not** cryptographic verification.
 - Performance/load testing on real camera devices.
 - Reject arbitrary snapshots uploaded to public media/CDN services.
+
+## Windows startup helper and optional live vision
+
+Use PowerShell in the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\start-local.ps1
+```
+
+It checks Docker Desktop, creates private random credentials if needed, starts **MongoDB + Spring Boot + the frontend**, verifies both HTTP endpoints, and prints the URLs. It never overwrites an existing `.env`.
+
+The standard `docker compose up -d --build` intentionally does **not** start the heavy YOLO/PyTorch image. After placing `models/best.pt`, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\start-local.ps1 -Vision
+```
+
+If the application still does not start, run `docker compose ps --all` and `docker compose logs --tail=70 api web mongodb`. **Remove passwords, database URIs and camera URLs before sharing output.**
