@@ -113,3 +113,34 @@ jobs:
         run: python scripts/setup_dev.py
       - name: Validate Docker Compose configuration
         run: docker compose config -q
+
+  docker-startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate private development credentials
+        run: python scripts/setup_dev.py
+      - name: Build and start the real Docker stack (without GPU model)
+        run: docker compose up --build -d mongodb api web
+      - name: Verify API and frontend respond
+        run: |
+          set -e
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8080/api/health | grep -q '"status":"ok"'; then break; fi
+            sleep 3
+          done
+          curl -fsS http://127.0.0.1:8080/api/health
+          curl -fsSI http://127.0.0.1:5173/
+          docker compose ps --all
+      - name: Diagnostic service status on failure
+        if: failure()
+        run: |
+          docker compose ps --all || true
+          docker compose logs --no-color --tail=80 mongodb api web || true
+      - name: Stop services
+        if: always()
+        run: docker compose down
