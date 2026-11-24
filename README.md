@@ -32,8 +32,10 @@ git clone https://github.com/AzizulHakim00/PresenceIQ.git
 cd PresenceIQ
 python scripts/setup_dev.py
 # Setup generates private, distinct secrets. Inspect .env locally.
+# On Windows, instead run:
+# powershell -ExecutionPolicy Bypass -File .\\scripts\\start-local.ps1
 # Put the existing trained class-0-person YOLO checkpoint at models/best.pt.
-docker compose up --build
+docker compose up -d --build\n# For live camera mode AFTER putting your checkpoint into models/best.pt:\n# docker compose --profile vision up -d --build
 ```
 
 Open **http://localhost:5173** and log in using the admin account configured in `.env`. Backend health: **http://localhost:8080/api/health**.
@@ -57,3 +59,22 @@ Prior V11.3 sampled-video data: 10,921 sampled core frames and 275,300 person de
 - Add automated integration/e2e tests for the Spring Boot + React + MongoDB system.
 
 MIT/license and production compliance terms are **not yet selected**.
+
+## Startup troubleshooting
+
+The default Compose command starts the **MongoDB + API + dashboard** services only, so you can log in without downloading the PyTorch/YOLO image. For camera inference, use the optional `vision` profile and your trained `models/best.pt` checkpoint.
+
+On Windows PowerShell run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\start-local.ps1
+```
+
+If Docker Desktop or the Engine is not running, the helper prints a clear error. To inspect the containers without revealing private credentials:
+
+```powershell
+docker compose ps --all
+docker compose logs --tail=70 api web mongodb
+```
+
+Do **not** share `.env`, `docker compose config` output, RTSP URLs or any secret-containing logs. Review and redact sensitive details first.
