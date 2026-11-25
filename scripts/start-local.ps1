@@ -67,8 +67,32 @@ if ($LASTEXITCODE -ne 0) {
     exit 7
 }
 
+# Docker may report the API as "Up" without publishing its port to Windows.
+# Check effective port binding without exposing Docker environment secrets.
+$binding = @(docker compose port api 8080 2>$null) -join ""
+if ($binding -notmatch ':8080$') {
+    Write-Host ""
+    Write-Host "The API host port 8080 is not published. Attempting to recreate only the API container..." -ForegroundColor Yellow
+    docker compose up -d --no-deps --force-recreate api
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "API recreation failed; check port conflicts or local Compose override files." -ForegroundColor Red
+        docker compose ps --all
+        exit 10
+    }
+    $binding = @(docker compose port api 8080 2>$null) -join ""
+    if ($binding -notmatch ':8080$') {
+        Write-Host "API still has no host port mapping. Expected 127.0.0.1:8080 -> 8080/tcp." -ForegroundColor Red
+        Write-Host "Check local compose.override.yml and inspect ONLY the non-secret port fields:"
+        Write-Host '  docker compose port api 8080'
+        Write-Host '  $c = docker compose config --format json | ConvertFrom-Json; $c.services.api.ports | Format-Table host_ip,published,target'
+        Write-Host "Do not share the full docker compose config output; it may expose secrets."
+        exit 11
+    }
+}
+Write-Host "API host port mapping: $binding" -ForegroundColor Green
+
 $ready = $false
-for ($attempt=0; $attempt -lt 90; $attempt++) {
+for ($attempt=0; $attempt -lt 30; $attempt++) {
     Start-Sleep -Seconds 2
     try {
         $health = Invoke-RestMethod -TimeoutSec 4 -Uri "http://127.0.0.1:8080/api/health"
@@ -79,7 +103,8 @@ for ($attempt=0; $attempt -lt 90; $attempt++) {
 Write-Host ""
 docker compose ps --all
 if (-not $ready) {
-    Write-Host "API did not become healthy. Check: docker compose logs --tail 100 api mongodb" -ForegroundColor Red
+    Write-Host "API port is published, but the health endpoint did not respond." -ForegroundColor Red
+    Write-Host "Check: docker compose logs --tail 100 api mongodb" -ForegroundColor Red
     Write-Host "Remove any passwords, connection strings, RTSP URLs, or private information before sharing logs."
     exit 8
 }
