@@ -1,12 +1,18 @@
 package com.presenceiq;
 
 import java.io.IOException;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.web.client.RestClientResponseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.util.LinkedMultiValueMap;
@@ -24,6 +30,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api")
 public class PresenceController {
+    private static final Logger log = LoggerFactory.getLogger(PresenceController.class);
     private final PresenceService svc;
     private final RestClient vision;
     private final String visionToken;
@@ -32,7 +39,13 @@ public class PresenceController {
             @Value("${app.vision.url}") String visionUrl,
             @Value("${app.vision.token}") String visionToken) {
         this.svc=svc;
-        this.vision=RestClient.builder().baseUrl(visionUrl).build();
+        // Uvicorn speaks HTTP/1.1. Do not negotiate an h2c upgrade with multipart bodies.
+        HttpClient client = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofSeconds(10)).build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(client);
+        factory.setReadTimeout(Duration.ofSeconds(120));
+        this.vision=RestClient.builder().requestFactory(factory).baseUrl(visionUrl).build();
         this.visionToken=visionToken;
     }
 
@@ -185,7 +198,8 @@ public class PresenceController {
     @PreAuthorize("hasRole('ADMIN')")
     public Map<String,Object> detectFrame(@PathVariable String id,
             @RequestPart("file") MultipartFile image,Authentication auth) throws IOException {
-        svc.session(id); // validate existence before forwarding
+        if (!"ACTIVE".equals(svc.session(id).getString("status")))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Start an active session first.");
         requireVision();
         if (image.isEmpty() || image.getSize()>2_500_000)
             throw PresenceService.bad("JPEG must be between 1 byte and 2.5 MB.");
@@ -193,16 +207,27 @@ public class PresenceController {
             throw PresenceService.bad("Only JPEG or PNG images are accepted.");
         MultiValueMap<String,Object> data=new LinkedMultiValueMap<>();
         byte[] bytes=image.getBytes();
-        data.add("file",new ByteArrayResource(bytes) {
-            @Override public String getFilename() { return "frame.jpg"; }
-        });
+        HttpHeaders partHeaders = new HttpHeaders();
+        partHeaders.setContentType(MediaType.parseMediaType(image.getContentType()));
+        ByteArrayResource resource = new ByteArrayResource(bytes) {
+            @Override public String getFilename() {
+                return "image/png".equals(image.getContentType()) ? "frame.png" : "frame.jpg";
+            }
+        };
+        data.add("file",new HttpEntity<>(resource,partHeaders));
         data.add("session_id",id);
         Map<?,?> detected;
         try {
             detected=vision.post().uri("/detect").header("X-Vision-Token",visionToken)
                     .contentType(MediaType.MULTIPART_FORM_DATA).body(data)
                     .retrieve().body(Map.class);
+        } catch (RestClientResponseException ex) {
+            // Log status only, never credentials or image content.
+            log.warn("Vision /detect rejected request: HTTP {}", ex.getStatusCode().value());
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Vision inference returned HTTP "+ex.getStatusCode().value()+"; check vision logs.");
         } catch (RestClientException ex) {
+            log.warn("Vision /detect transport failed: {}", ex.getClass().getSimpleName());
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                     "Vision inference unavailable; check model weights and service logs.");
         }
